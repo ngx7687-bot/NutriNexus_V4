@@ -1,237 +1,268 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Reminder } from '../types';
-import { Bell, Plus, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { Bell, Plus, CheckCircle, Clock, Trash2, AlertCircle } from 'lucide-react';
 
 interface RemindersViewProps {
   reminders: Reminder[];
   onAddReminder: (reminder: Omit<Reminder, 'id' | 'userId' | 'createdAt'>) => Promise<void>;
   onUpdateReminderStatus: (reminderId: string, status: Reminder['status']) => Promise<void>;
+  onDeleteReminder?: (reminderId: string) => Promise<void>;
 }
 
 export const RemindersView: React.FC<RemindersViewProps> = ({
-  reminders,
+  reminders: propReminders,
   onAddReminder,
   onUpdateReminderStatus,
+  onDeleteReminder,
 }) => {
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [type, setType] = useState<Reminder['type']>('medication');
-  const [title, setTitle] = useState<string>('');
-  const [notes, setNotes] = useState<string>('');
-  const [dateTime, setDateTime] = useState<string>(
-    new Date(Date.now() + 3600000).toISOString().slice(0, 16)
-  );
-  const [repeatRule, setRepeatRule] = useState<string>('Daily');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [reminders, setReminders] = useState<Reminder[]>(() => {
+    if (propReminders && propReminders.length > 0) return propReminders;
+    const saved = localStorage.getItem('nutrinexus_reminders');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: '1',
+        userId: 'guest',
+        type: 'medication',
+        title: 'Metformin 500mg',
+        dateTime: '28/10/2026 03:00 PM',
+        repeatRule: 'Daily',
+        notes: 'Take with food',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }
+    ];
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (propReminders && propReminders.length > 0) {
+      setReminders(propReminders);
+    }
+  }, [propReminders]);
+
+  useEffect(() => {
+    localStorage.setItem('nutrinexus_reminders', JSON.stringify(reminders));
+  }, [reminders]);
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [type, setType] = useState('medication');
+  const [title, setTitle] = useState('');
+  const [dateTime, setDateTime] = useState('28/10/2026 03:00 PM');
+  const [repeatRule, setRepeatRule] = useState('Once');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSaveReminder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title) return;
-    setLoading(true);
+    if (!title.trim()) {
+      setError('Please fill out the title field.');
+      return;
+    }
+
     try {
       await onAddReminder({
-        type,
-        title,
-        notes,
+        type: type as any,
+        title: title.trim(),
         dateTime,
         repeatRule,
+        notes: notes.trim(),
         status: 'pending',
       });
+
+      const newReminder: Reminder = {
+        id: Date.now().toString(),
+        userId: 'guest',
+        type: type as any,
+        title: title.trim(),
+        dateTime,
+        repeatRule,
+        notes: notes.trim(),
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+
+      setReminders([newReminder, ...reminders]);
       setTitle('');
       setNotes('');
-      setShowAddModal(false);
+      setError('');
+      setIsCreating(false);
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
+      setError('Failed to save reminder');
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (onDeleteReminder) {
+      await onDeleteReminder(id);
+    }
+    setReminders(reminders.filter(r => r.id !== id));
+  };
+
+  const toggleComplete = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'taken' || currentStatus === 'done' ? 'pending' : 'taken';
+    if (onUpdateReminderStatus) {
+      await onUpdateReminderStatus(id, newStatus);
+    }
+    setReminders(reminders.map(r => r.id === id ? { ...r, status: newStatus } : r));
+  };
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8 pb-24 md:pb-12">
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Health & Medication Reminders</h2>
-            <p className="text-gray-600 text-sm mt-1">Never miss a dose or doctor appointment. Log your responses instantly.</p>
-          </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-2 text-sm"
-          >
-            <Plus className="w-4 h-4" /> Add Reminder
-          </button>
+    <div className="max-w-4xl mx-auto p-6 space-y-6 pb-24 md:pb-12">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Health & Medication Reminders</h2>
+          <p className="text-sm text-slate-500">Manage your daily medications, appointments, and check-ups.</p>
         </div>
-
-        {/* Add Modal */}
-        {showAddModal && (
-          <div className="bg-emerald-50/70 border border-emerald-200 p-6 rounded-2xl space-y-4 animate-fadeIn">
-            <h3 className="text-lg font-bold text-gray-900">Create New Reminder</h3>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-600 mb-1">Type</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as any)}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-medium"
-                >
-                  <option value="medication">Medication</option>
-                  <option value="appointment">Doctor Appointment</option>
-                  <option value="other">Other Health Check</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-600 mb-1">Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Metformin 500mg or Cardiologist"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-medium"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-600 mb-1">Date & Time</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={dateTime}
-                  onChange={(e) => setDateTime(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-medium"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-600 mb-1">Repeat Rule</label>
-                <select
-                  value={repeatRule}
-                  onChange={(e) => setRepeatRule(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-medium"
-                >
-                  <option value="Once">Once</option>
-                  <option value="Daily">Daily</option>
-                  <option value="Weekly">Weekly</option>
-                  <option value="Monthly">Monthly</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold uppercase text-gray-600 mb-1">Notes / Instructions</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Take with food"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-medium"
-                />
-              </div>
-              <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-xl text-sm font-medium transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl text-sm font-semibold shadow-md transition"
-                >
-                  Save Reminder
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Reminders List */}
-        {reminders.length === 0 ? (
-          <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-            <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-gray-800">No reminders created</h3>
-            <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              Add your medications or doctor appointments to stay on track and notify your family companions if needed.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {reminders.map((reminder) => {
-              const timeFormatted = new Date(reminder.dateTime).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-
-              return (
-                <div
-                  key={reminder.id}
-                  className={`border rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition ${
-                    reminder.status === 'taken' || reminder.status === 'done'
-                      ? 'bg-emerald-50/40 border-emerald-200'
-                      : reminder.status === 'skipped'
-                      ? 'bg-gray-50 border-gray-200 opacity-75'
-                      : 'bg-white border-gray-200 shadow-xs'
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                        reminder.type === 'medication'
-                          ? 'bg-blue-100 text-blue-800'
-                          : reminder.type === 'appointment'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {reminder.type}
-                      </span>
-                      <span className="text-xs text-gray-500">• {reminder.repeatRule}</span>
-                    </div>
-                    <h4 className="font-bold text-gray-900 text-base">{reminder.title}</h4>
-                    <p className="text-xs text-gray-600">{reminder.notes || 'No instructions provided.'}</p>
-                    <div className="text-xs text-emerald-700 font-semibold flex items-center gap-1 pt-1">
-                      <Clock className="w-3.5 h-3.5" /> Due: {timeFormatted}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {reminder.status === 'pending' ? (
-                      <>
-                        <button
-                          onClick={() => onUpdateReminderStatus(reminder.id, reminder.type === 'medication' ? 'taken' : 'done')}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-xs"
-                        >
-                          <CheckCircle className="w-4 h-4" /> {reminder.type === 'medication' ? 'Take' : 'Done'}
-                        </button>
-                        <button
-                          onClick={() => onUpdateReminderStatus(reminder.id, 'snoozed')}
-                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-semibold px-3.5 py-2 rounded-xl transition"
-                        >
-                          Snooze
-                        </button>
-                        <button
-                          onClick={() => onUpdateReminderStatus(reminder.id, 'skipped')}
-                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3 py-2 rounded-xl transition"
-                        >
-                          Skip
-                        </button>
-                      </>
-                    ) : (
-                      <span className={`text-xs font-bold px-3 py-1.5 rounded-xl capitalize ${
-                        reminder.status === 'taken' || reminder.status === 'done'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-gray-200 text-gray-700'
-                      }`}>
-                        Status: {reminder.status}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {!isCreating && (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm"
+          >
+            + New Reminder
+          </button>
         )}
       </div>
+
+      {isCreating ? (
+        <form onSubmit={handleSaveReminder} className="bg-white p-6 rounded-xl shadow-md space-y-4 border border-slate-100">
+          <h3 className="text-lg font-bold text-slate-800">Create New Reminder</h3>
+          
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full p-2.5 border rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="medication">Medication</option>
+                <option value="appointment">Appointment</option>
+                <option value="Blood Glucose Check">Blood Glucose Check</option>
+                <option value="Exercise">Exercise</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Title *</label>
+              <input
+                type="text"
+                placeholder="e.g. Metformin 500mg or Cardiologist"
+                value={title}
+                onChange={(e) => { setTitle(e.target.value); setError(''); }}
+                className="w-full p-2.5 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Date & Time</label>
+              <input
+                type="text"
+                value={dateTime}
+                onChange={(e) => setDateTime(e.target.value)}
+                className="w-full p-2.5 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Repeat Rule</label>
+              <select
+                value={repeatRule}
+                onChange={(e) => setRepeatRule(e.target.value)}
+                className="w-full p-2.5 border rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="Once">Once</option>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Notes / Instructions</label>
+            <input
+              type="text"
+              placeholder="e.g. Take with food"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full p-2.5 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsCreating(false)}
+              className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
+            >
+              Save Reminder
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="space-y-4">
+          {reminders.length === 0 ? (
+            <div className="bg-white p-10 rounded-xl shadow-sm text-center border border-slate-100">
+              <p className="text-slate-500">No reminder records found. Click "+ New Reminder" to add one.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {reminders.map((reminder) => {
+                const isCompleted = reminder.status === 'taken' || reminder.status === 'done' || (reminder as any).completed;
+                return (
+                  <div 
+                    key={reminder.id}
+                    className={`p-4 bg-white rounded-xl shadow-sm border flex items-center justify-between transition ${isCompleted ? 'opacity-60 bg-slate-50' : 'border-slate-200'}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isCompleted}
+                        onChange={() => toggleComplete(reminder.id, reminder.status)}
+                        className="mt-1.5 h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full capitalize">
+                            {reminder.type}
+                          </span>
+                          <h4 className={`font-bold text-slate-800 ${isCompleted ? 'line-through text-slate-400' : ''}`}>
+                            {reminder.title}
+                          </h4>
+                        </div>
+                        <p className="text-sm text-slate-600 mt-1">
+                          🕒 {reminder.dateTime} • <span className="text-slate-500">{reminder.repeatRule}</span>
+                        </p>
+                        {reminder.notes && (
+                          <p className="text-xs text-slate-500 mt-1 italic">Note: {reminder.notes}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDelete(reminder.id)}
+                      className="text-red-500 hover:text-red-700 text-sm font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition flex items-center gap-1"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
