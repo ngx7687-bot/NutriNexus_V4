@@ -4,6 +4,7 @@ interface UserAccount {
   email: string;
   fullName: string;
   role: string;
+  createdAt?: string;
 }
 
 interface HomeDashboardProps {
@@ -86,7 +87,28 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAu
     }
   };
 
+  const ADMIN_ACCOUNT: UserAccount = {
+    email: 'ngx7687@gmail.com',
+    fullName: 'System Administrator',
+    role: 'Admin',
+    createdAt: '2026-03-01'
+  };
+
   useEffect(() => {
+    // 1. Ensure ngx7687@gmail.com always exists in local storage
+    const rawUsers = localStorage.getItem('nutrinexus_users');
+    let currentUsers: UserAccount[] = rawUsers ? JSON.parse(rawUsers) : [];
+
+    const adminExists = currentUsers.some(
+      (u) => u.email.toLowerCase() === ADMIN_ACCOUNT.email.toLowerCase()
+    );
+
+    if (!adminExists) {
+      currentUsers = [ADMIN_ACCOUNT, ...currentUsers.filter(u => u.email !== ADMIN_ACCOUNT.email)];
+      localStorage.setItem('nutrinexus_users', JSON.stringify(currentUsers));
+    }
+
+    // 2. Check active session
     checkUser();
     window.addEventListener('storage', checkUser);
     return () => window.removeEventListener('storage', checkUser);
