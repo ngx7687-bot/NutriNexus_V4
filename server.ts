@@ -22,25 +22,25 @@ const ai = new GoogleGenAI({
   },
 });
 
+const clinicalNutritionistSystemInstruction = "You are an expert clinical nutritionist and AI vision assistant for NutriNexus, a health and wellness app focused on blood sugar management and dietary tracking. When a user uploads an image of a meal (such as Nasi Lemak, chicken rice, or local dishes), analyze the food items visible in the image. You MUST return your response strictly as a valid JSON object matching the requested schema.";
+
 // API endpoint for food image scanning and glycemic impact estimation
-app.post("/api/scan", async (req, res) => {
+app.post(["/api/scan", "/api/analyze-meal"], async (req, res) => {
   try {
-    const { imageBase64, mimeType = "image/jpeg", userContext } = req.body;
-    if (!imageBase64) {
-      return res.status(400).json({ error: "Missing imageBase64 data" });
+    const { image, imageBase64, mimeType = "image/jpeg", userContext } = req.body;
+    const base64Data = imageBase64 || (image ? image.split(',')[1] : null);
+    if (!base64Data) {
+      return res.status(400).json({ error: "Missing image data" });
     }
 
-    const prompt = `Analyze this meal image for nutritional content and glycemic impact. 
+    const prompt = `Analyze this meal image for nutritional content, ingredients, and glycemic impact. 
     User context: ${JSON.stringify(userContext || {})}.
-    Provide a detailed breakdown of each food item detected (name, portion_g, calories, carbs_g, fiber_g, sugar_g, protein_g, fat_g, estimated_gi).
-    Calculate overall glycemic_load (sum of (GI * carbs) / 100 per food).
-    Determine glycemic_impact as 'low' (<=10), 'medium' (11-19), or 'high' (>=20).
-    Provide confidence (0.0 to 1.0) and helpful notes.`;
+    Provide mealName, calories, protein, fiber, carbs, fats, ingredients list, and healthTip.`;
 
     const imagePart = {
       inlineData: {
         mimeType: mimeType,
-        data: imageBase64,
+        data: base64Data,
       },
     };
 
@@ -48,34 +48,25 @@ app.post("/api/scan", async (req, res) => {
       model: "gemini-3.8-flash",
       contents: { parts: [imagePart, { text: prompt }] },
       config: {
+        systemInstruction: clinicalNutritionistSystemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            foods: {
+            mealName: { type: Type.STRING, description: "Name of the dish (e.g., Traditional Nasi Lemak)" },
+            calories: { type: Type.NUMBER, description: "Estimated total calories in kcal" },
+            protein: { type: Type.NUMBER, description: "Estimated protein in grams" },
+            fiber: { type: Type.NUMBER, description: "Estimated dietary fiber in grams" },
+            carbs: { type: Type.NUMBER, description: "Estimated carbohydrates in grams" },
+            fats: { type: Type.NUMBER, description: "Estimated fats in grams" },
+            ingredients: {
               type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  portion_g: { type: Type.NUMBER },
-                  calories: { type: Type.NUMBER },
-                  carbs_g: { type: Type.NUMBER },
-                  fiber_g: { type: Type.NUMBER },
-                  sugar_g: { type: Type.NUMBER },
-                  protein_g: { type: Type.NUMBER },
-                  fat_g: { type: Type.NUMBER },
-                  estimated_gi: { type: Type.NUMBER },
-                },
-                required: ["name", "portion_g", "calories", "carbs_g", "estimated_gi"],
-              },
+              items: { type: Type.STRING },
+              description: "List of identified ingredients"
             },
-            glycemic_load: { type: Type.NUMBER },
-            glycemic_impact: { type: Type.STRING },
-            confidence: { type: Type.NUMBER },
-            notes: { type: Type.STRING },
+            healthTip: { type: Type.STRING, description: "A brief clinical or dietary tip regarding this meal, especially considering glycemic impact." }
           },
-          required: ["foods", "glycemic_load", "glycemic_impact", "confidence"],
+          required: ["mealName", "calories", "protein", "fiber", "carbs", "fats", "ingredients", "healthTip"],
         },
       },
     });
@@ -88,7 +79,7 @@ app.post("/api/scan", async (req, res) => {
     const data = JSON.parse(resultText);
     res.json(data);
   } catch (error: any) {
-    console.error("Scan error:", error);
+    console.error("Scan/Analyze error:", error);
     res.status(500).json({ error: error.message || "Failed to analyze meal image" });
   }
 });
@@ -102,6 +93,9 @@ app.post("/api/tip", async (req, res) => {
     const response = await ai.models.generateContent({
       model: "gemini-3.8-flash",
       contents: prompt,
+      config: {
+        systemInstruction: clinicalNutritionistSystemInstruction,
+      }
     });
 
     res.json({ tip: response.text?.trim() || "Stay consistent with your nutrition and hydration goals today!" });
