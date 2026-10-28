@@ -1,0 +1,6 @@
+{
+  "name": "NutriNexus",
+  "description": "AI-Powered Nutrition & Health Companion with Glycemic Tracking, Reminders, Rewards, and Family Support",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

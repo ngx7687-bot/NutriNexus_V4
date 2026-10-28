@@ -1,0 +1,172 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile data, calculated metrics, and nutritional targets",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "age": { "type": "number" },
+        "sex": { "type": "string", "enum": ["male", "female", "other"] },
+        "weightKg": { "type": "number" },
+        "heightCm": { "type": "number" },
+        "activityLevel": { "type": "string", "enum": ["sedentary", "light", "moderate", "very_active", "extra_active"] },
+        "contactNumber": { "type": "string" },
+        "bmi": { "type": "number" },
+        "bmr": { "type": "number" },
+        "tdee": { "type": "number" },
+        "targets": {
+          "type": "object",
+          "properties": {
+            "calories": { "type": "number" },
+            "carbsG": { "type": "number" },
+            "proteinG": { "type": "number" },
+            "fatG": { "type": "number" },
+            "fiberG": { "type": "number" },
+            "sugarG": { "type": "number" }
+          }
+        },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "name", "email"]
+    },
+    "HealthRecord": {
+      "title": "Health Record",
+      "description": "Medical history, conditions, medications, allergies, and lab values",
+      "type": "object",
+      "properties": {
+        "conditions": { "type": "array", "items": { "type": "string" } },
+        "medications": { "type": "array", "items": { "type": "string" } },
+        "allergies": { "type": "array", "items": { "type": "string" } },
+        "hba1c": { "type": "number" },
+        "fastingGlucose": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Meal": {
+      "title": "Meal Log",
+      "description": "Scanned or logged meal with nutritional breakdown, glycemic impact, and score",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "foods": { "type": "array", "items": { "type": "object" } },
+        "glycemicLoad": { "type": "number" },
+        "glycemicImpact": { "type": "string", "enum": ["low", "medium", "high"] },
+        "confidence": { "type": "number" },
+        "notes": { "type": "string" },
+        "nutritionScore": { "type": "number" },
+        "tip": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "timestamp"]
+    },
+    "PointEntry": {
+      "title": "Points Ledger Entry",
+      "description": "Points earned by user for health and nutrition actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "points": { "type": "number" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "Reward": {
+      "title": "Unlocked Reward",
+      "description": "Badges and levels unlocked by user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "badgeIcon": { "type": "string" },
+        "unlockedAt": { "type": "string" }
+      }
+    },
+    "Reminder": {
+      "title": "Health Reminder",
+      "description": "Medication, appointment, or checkup reminders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["medication", "appointment", "other"] },
+        "title": { "type": "string" },
+        "notes": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "repeatRule": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "taken", "done", "snoozed", "skipped"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "title", "dateTime"]
+    },
+    "ReminderLog": {
+      "title": "Reminder Log",
+      "description": "History of reminder responses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reminderId": { "type": "string" },
+        "action": { "type": "string", "enum": ["taken", "done", "snoozed", "skipped", "missed"] },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "Companion": {
+      "title": "Family Companion",
+      "description": "Family companion details and notification settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "relationship": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "consentStatus": { "type": "string", "enum": ["pending", "confirmed"] },
+        "shareReminders": { "type": "boolean" },
+        "shareHighGlycemicAlerts": { "type": "boolean" },
+        "gracePeriodMinutes": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "name", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/users/{userId}/healthRecord/{recordId}": {
+      "schema": "HealthRecord",
+      "description": "User health records and lab values"
+    },
+    "/users/{userId}/meals/{mealId}": {
+      "schema": "Meal",
+      "description": "Scanned and logged meals"
+    },
+    "/users/{userId}/points/{entryId}": {
+      "schema": "PointEntry",
+      "description": "Points ledger for rewards"
+    },
+    "/users/{userId}/rewards/{rewardId}": {
+      "schema": "Reward",
+      "description": "Unlocked reward badges"
+    },
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": "Reminder",
+      "description": "Medication and appointment reminders"
+    },
+    "/users/{userId}/reminderLogs/{logId}": {
+      "schema": "ReminderLog",
+      "description": "Reminder response history"
+    },
+    "/users/{userId}/companions/{companionId}": {
+      "schema": "Companion",
+      "description": "Family companions for alerts"
+    }
+  }
+}
