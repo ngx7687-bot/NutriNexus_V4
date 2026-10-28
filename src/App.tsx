@@ -11,6 +11,7 @@ import { RemindersView } from './components/RemindersView';
 import { CompanionsView } from './components/CompanionsView';
 import { RewardsView } from './components/RewardsView';
 import { ProfileOnboarding } from './components/ProfileOnboarding';
+import GalleryView from './components/GalleryView';
 import AuthView from './components/AuthView';
 import { Loader2 } from 'lucide-react';
 
@@ -284,6 +285,9 @@ export default function App() {
                 pointsLedger={pointsLedger}
                 rewards={rewards}
               />
+            )}
+            {activeTab === 'gallery' && (
+              <GalleryView />
             )}
             {activeTab === 'profile' && (
               <ProfileOnboarding

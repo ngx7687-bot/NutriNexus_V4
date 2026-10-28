@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Camera, Utensils, Bell, Trophy, User as UserIcon, LogOut, ShieldAlert } from 'lucide-react';
+import { Home, Camera, Utensils, Bell, Trophy, User as UserIcon, LogOut, ShieldAlert, Image as ImageIcon } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface NavbarProps {
@@ -25,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'meals', label: 'Meals', icon: Utensils },
     { id: 'reminders', label: 'Reminders', icon: Bell },
     { id: 'rewards', label: 'Rewards', icon: Trophy },
+    { id: 'gallery', label: 'Gallery', icon: ImageIcon },
     { id: 'profile', label: 'Profile', icon: UserIcon },
   ];
 
@@ -56,7 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-emerald-50 text-emerald-700 shadow-xs'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -97,14 +98,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onLogin}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-xl text-sm shadow-sm transition flex items-center gap-2"
             >
-              Sign In with Google
+              Sign In
             </button>
           )}
         </div>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-3 flex justify-around items-center z-50 shadow-lg">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-2 flex justify-around items-center z-50 shadow-lg">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -112,12 +113,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center py-1 px-2 rounded-lg transition ${
+              className={`flex flex-col items-center py-1 px-1.5 rounded-lg transition ${
                 isActive ? 'text-emerald-600 font-semibold' : 'text-gray-500 hover:text-gray-900'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'text-emerald-600' : 'text-gray-400'}`} />
-              <span className="text-[10px] mt-1">{item.label}</span>
+              <span className="text-[9px] mt-0.5">{item.label}</span>
             </button>
           );
         })}
