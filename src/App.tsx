@@ -11,6 +11,7 @@ import { RemindersView } from './components/RemindersView';
 import { CompanionsView } from './components/CompanionsView';
 import { RewardsView } from './components/RewardsView';
 import { ProfileOnboarding } from './components/ProfileOnboarding';
+import AuthView from './components/AuthView';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -34,7 +35,6 @@ export default function App() {
       if (firebaseUser) {
         await loadUserData(firebaseUser.uid);
       } else {
-        // Load default mock or guest data if desired
         setUserProfile(null);
         setHealthRecord(null);
         setMeals([]);
@@ -48,7 +48,6 @@ export default function App() {
 
   const loadUserData = async (uid: string) => {
     try {
-      // 1. User Profile
       const userRef = doc(db, 'users', uid);
       const userSnap = await getDoc(userRef).catch(err => {
         handleFirestoreError(err, OperationType.GET, `users/${uid}`);
@@ -58,27 +57,22 @@ export default function App() {
         setUserProfile(userSnap.data() as UserProfile);
       }
 
-      // 2. Health Record
       const healthRef = doc(db, 'users', uid, 'healthRecord', 'primary');
       const healthSnap = await getDoc(healthRef).catch(() => null);
       if (healthSnap && healthSnap.exists()) {
         setHealthRecord(healthSnap.data() as HealthRecord);
       }
 
-      // 3. Meals
       const mealsSnap = await getDocs(collection(db, 'users', uid, 'meals')).catch(() => ({ docs: [] }));
       const loadedMeals: Meal[] = mealsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Meal));
       setMeals(loadedMeals.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
-      // 4. Reminders
       const remindersSnap = await getDocs(collection(db, 'users', uid, 'reminders')).catch(() => ({ docs: [] }));
       setReminders(remindersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Reminder)));
 
-      // 5. Companions
       const compSnap = await getDocs(collection(db, 'users', uid, 'companions')).catch(() => ({ docs: [] }));
       setCompanions(compSnap.docs.map(d => ({ id: d.id, ...d.data() } as Companion)));
 
-      // 6. Points
       const pointsSnap = await getDocs(collection(db, 'users', uid, 'points')).catch(() => ({ docs: [] }));
       setPointsLedger(pointsSnap.docs.map(d => ({ id: d.id, ...d.data() } as PointEntry)));
 
@@ -87,7 +81,6 @@ export default function App() {
     }
   };
 
-  // Award points helper
   const awardPoints = async (uid: string, points: number, reason: string) => {
     try {
       const pointEntry: Omit<PointEntry, 'id'> = {
@@ -104,7 +97,6 @@ export default function App() {
     }
   };
 
-  // Save profile and health record
   const handleSaveProfile = async (profile: UserProfile, health: HealthRecord) => {
     if (!user) return;
     try {
@@ -118,7 +110,6 @@ export default function App() {
     }
   };
 
-  // Save meal
   const handleSaveMeal = async (mealData: Omit<Meal, 'id'>) => {
     if (!user) return;
     try {
@@ -132,7 +123,6 @@ export default function App() {
     }
   };
 
-  // Delete meal
   const handleDeleteMeal = async (mealId: string) => {
     if (!user) return;
     try {
@@ -143,7 +133,6 @@ export default function App() {
     }
   };
 
-  // Add reminder
   const handleAddReminder = async (reminderData: Omit<Reminder, 'id' | 'userId' | 'createdAt'>) => {
     if (!user) return;
     try {
@@ -161,7 +150,6 @@ export default function App() {
     }
   };
 
-  // Update reminder status
   const handleUpdateReminderStatus = async (reminderId: string, status: Reminder['status']) => {
     if (!user) return;
     try {
@@ -175,7 +163,16 @@ export default function App() {
     }
   };
 
-  // Add companion
+  const handleDeleteReminder = async (reminderId: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'reminders', reminderId));
+      setReminders(prev => prev.filter(r => r.id !== reminderId));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleAddCompanion = async (compData: Omit<Companion, 'id' | 'userId' | 'createdAt'>) => {
     if (!user) return;
     try {
@@ -193,7 +190,6 @@ export default function App() {
     }
   };
 
-  // Delete companion
   const handleDeleteCompanion = async (companionId: string) => {
     if (!user) return;
     try {
@@ -221,61 +217,83 @@ export default function App() {
         setActiveTab={setActiveTab}
         user={user}
         userProfile={userProfile}
-        onLogin={loginWithGoogle}
-        onLogout={logoutUser}
+        onLogin={() => setActiveTab('auth')}
+        onLogout={async () => {
+          await logoutUser();
+          setActiveTab('auth');
+        }}
       />
 
       <main className="flex-1">
-        {activeTab === 'home' && (
-          <HomeDashboard
-            userProfile={userProfile}
-            meals={meals}
-            reminders={reminders}
-            pointsTotal={pointsTotal}
-            setActiveTab={setActiveTab}
+        {activeTab === 'auth' ? (
+          <AuthView
+            onLoginSuccess={(loggedInUser) => {
+              setActiveTab('home');
+            }}
+            onGoogleLogin={async () => {
+              try {
+                await loginWithGoogle();
+                setActiveTab('home');
+              } catch (e) {
+                console.error(e);
+              }
+            }}
           />
-        )}
-        {activeTab === 'scan' && (
-          <ScanMeal
-            userProfile={userProfile}
-            onSaveMeal={handleSaveMeal}
-            setActiveTab={setActiveTab}
-          />
-        )}
-        {activeTab === 'meals' && (
-          <MealsHistory
-            meals={meals}
-            onDeleteMeal={handleDeleteMeal}
-          />
-        )}
-        {activeTab === 'reminders' && (
-          <RemindersView
-            reminders={reminders}
-            onAddReminder={handleAddReminder}
-            onUpdateReminderStatus={handleUpdateReminderStatus}
-          />
-        )}
-        {activeTab === 'companions' && (
-          <CompanionsView
-            companions={companions}
-            onAddCompanion={handleAddCompanion}
-            onDeleteCompanion={handleDeleteCompanion}
-          />
-        )}
-        {activeTab === 'rewards' && (
-          <RewardsView
-            pointsTotal={pointsTotal}
-            pointsLedger={pointsLedger}
-            rewards={rewards}
-          />
-        )}
-        {activeTab === 'profile' && (
-          <ProfileOnboarding
-            user={user}
-            userProfile={userProfile}
-            healthRecord={healthRecord}
-            onSaveProfile={handleSaveProfile}
-          />
+        ) : (
+          <>
+            {activeTab === 'home' && (
+              <HomeDashboard
+                userProfile={userProfile}
+                meals={meals}
+                reminders={reminders}
+                pointsTotal={pointsTotal}
+                setActiveTab={setActiveTab}
+              />
+            )}
+            {activeTab === 'scan' && (
+              <ScanMeal
+                userProfile={userProfile}
+                onSaveMeal={handleSaveMeal}
+                setActiveTab={setActiveTab}
+              />
+            )}
+            {activeTab === 'meals' && (
+              <MealsHistory
+                meals={meals}
+                onDeleteMeal={handleDeleteMeal}
+              />
+            )}
+            {activeTab === 'reminders' && (
+              <RemindersView
+                reminders={reminders}
+                onAddReminder={handleAddReminder}
+                onUpdateReminderStatus={handleUpdateReminderStatus}
+                onDeleteReminder={handleDeleteReminder}
+              />
+            )}
+            {activeTab === 'companions' && (
+              <CompanionsView
+                companions={companions}
+                onAddCompanion={handleAddCompanion}
+                onDeleteCompanion={handleDeleteCompanion}
+              />
+            )}
+            {activeTab === 'rewards' && (
+              <RewardsView
+                pointsTotal={pointsTotal}
+                pointsLedger={pointsLedger}
+                rewards={rewards}
+              />
+            )}
+            {activeTab === 'profile' && (
+              <ProfileOnboarding
+                user={user}
+                userProfile={userProfile}
+                healthRecord={healthRecord}
+                onSaveProfile={handleSaveProfile}
+              />
+            )}
+          </>
         )}
       </main>
 
