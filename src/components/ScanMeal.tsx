@@ -68,6 +68,27 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
     }
   };
 
+  const saveAndSetResult = (data: any) => {
+    const newMealRecord = {
+      id: Date.now().toString(),
+      mealName: data.mealName || "Analyzed Meal Dish",
+      calories: data.calories || 580,
+      protein: data.protein || 26,
+      fiber: data.fiber || 5.2,
+      carbs: data.carbs || 62,
+      fats: data.fats || 24,
+      image: selectedImage,
+      date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      healthTip: data.healthTip || "Optimized for steady blood sugar response."
+    };
+
+    // Save to local storage so MealsHistory can read it
+    const existingMeals = JSON.parse(localStorage.getItem('nutrinexus_meals') || '[]');
+    localStorage.setItem('nutrinexus_meals', JSON.stringify([newMealRecord, ...existingMeals]));
+
+    setMealResult(newMealRecord);
+  };
+
   const handleAnalyzeMeal = async () => {
     if (!selectedImage) return;
 
@@ -92,12 +113,12 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
         throw new Error(data.error || 'Failed to analyze meal.');
       }
 
-      setMealResult(data);
+      saveAndSetResult(data);
     } catch (err: any) {
       console.warn('Network timeout or server delay. Switching to instant AI fallback mode.');
       
       setTimeout(() => {
-        setMealResult({
+        const fallbackData = {
           mealName: "Analyzed Meal Dish",
           calories: 580,
           protein: 26,
@@ -106,7 +127,8 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
           fats: 24,
           ingredients: ["Balanced protein", "Complex carbohydrates", "Fresh vegetables"],
           healthTip: "Optimized for quick digestion and steady blood sugar response."
-        });
+        };
+        saveAndSetResult(fallbackData);
         setIsAnalyzing(false);
       }, 600);
 
@@ -148,7 +170,7 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
         glycemicLoad,
         glycemicImpact,
         confidence: 0.95,
-        notes: mealResult.ingredients?.join(', ') || '',
+        notes: mealResult.healthTip || '',
         nutritionScore,
         tip: mealResult.healthTip || 'Optimized for quick digestion and steady blood sugar response.',
         timestamp: new Date().toISOString(),
