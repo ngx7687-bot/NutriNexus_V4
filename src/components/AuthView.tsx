@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AdminUsersView from './AdminUsersView';
 
 interface UserAccount {
   email: string;
@@ -24,8 +25,24 @@ export default function AuthView({ onLoginSuccess, onGoogleLogin, currentUserSta
   const [users, setUsers] = useState<UserAccount[]>(() => {
     const saved = localStorage.getItem('nutrinexus_users');
     return saved ? JSON.parse(saved) : [
-      { email: 'admin@nutrinexus.com', fullName: 'System Admin', role: 'Admin', createdAt: '2026-01-01' },
-      { email: 'user@nutrinexus.com', fullName: 'John Doe', role: 'User', createdAt: '2026-02-15' }
+      { 
+        email: 'ngx7687@gmail.com', 
+        fullName: 'System Administrator', 
+        role: 'Admin', 
+        createdAt: '2026-01-01' 
+      },
+      { 
+        email: 'admin@nutrinexus.com', 
+        fullName: 'System Admin', 
+        role: 'Admin', 
+        createdAt: '2026-01-01' 
+      },
+      { 
+        email: 'user@nutrinexus.com', 
+        fullName: 'John Doe', 
+        role: 'User', 
+        createdAt: '2026-02-15' 
+      }
     ];
   });
 
@@ -79,7 +96,6 @@ export default function AuthView({ onLoginSuccess, onGoogleLogin, currentUserSta
       setCurrentUser(newUser);
       localStorage.setItem('nutrinexus_current_user', JSON.stringify(newUser));
 
-      // Pre-fill profile storage with the registered name and email
       const existingProfile = JSON.parse(localStorage.getItem('nutrinexus_profile') || '{}');
       localStorage.setItem('nutrinexus_profile', JSON.stringify({
         ...existingProfile,
@@ -105,50 +121,33 @@ export default function AuthView({ onLoginSuccess, onGoogleLogin, currentUserSta
     setCurrentUser(null);
     localStorage.removeItem('nutrinexus_current_user');
     if (onLogoutState) onLogoutState();
-  };
-
-  const handleRemoveUser = (emailToRemove: string) => {
-    if (emailToRemove === currentUser?.email) {
-      setError('You cannot delete your own active admin account.');
-      return;
-    }
-    setUsers(users.filter(u => u.email !== emailToRemove));
+    window.location.reload();
   };
 
   if (currentUser?.role === 'Admin') {
     return (
-      <div className="max-w-4xl mx-auto p-6 space-y-6 pb-24 md:pb-12">
-        <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-          <div>
-            <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-full">Admin Portal</span>
-            <h2 className="text-2xl font-bold text-slate-800 mt-1">User Management Dashboard</h2>
-            <p className="text-sm text-slate-500">Logged in as: {currentUser.fullName} ({currentUser.email})</p>
-          </div>
+      <div className="space-y-4">
+        <div className="max-w-5xl mx-auto px-4 pt-4 flex justify-end">
           <button onClick={handleLogout} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition">
-            Logout
+            Logout ({currentUser.email})
           </button>
         </div>
+        <AdminUsersView />
+      </div>
+    );
+  }
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
-          <h3 className="text-lg font-bold text-slate-800">Registered Users ({users.length})</h3>
-          {error && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>}
-          
-          <div className="divide-y divide-slate-100">
-            {users.map((u) => (
-              <div key={u.email} className="py-3 flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-slate-800">{u.fullName} <span className="text-xs font-normal text-slate-500">({u.email})</span></p>
-                  <p className="text-xs text-slate-500">Joined: {u.createdAt} • Role: <span className={u.role === 'Admin' ? 'text-purple-600 font-bold' : 'text-emerald-600'}>{u.role}</span></p>
-                </div>
-                {u.role !== 'Admin' && (
-                  <button onClick={() => handleRemoveUser(u.email)} className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-medium transition">
-                    Remove User
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+  if (currentUser?.role === 'User') {
+    return (
+      <div className="max-w-md mx-auto p-6 bg-white rounded-xl shadow-md text-center space-y-4 my-12">
+        <h2 className="text-xl font-bold text-slate-800">Welcome, {currentUser.fullName || currentUser.email}</h2>
+        <p className="text-sm text-slate-500">You are logged in as a standard User.</p>
+        <button
+          onClick={handleLogout}
+          className="w-full py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition"
+        >
+          Logout
+        </button>
       </div>
     );
   }
