@@ -29,19 +29,7 @@ export default function AuthView({ onLoginSuccess, onGoogleLogin, currentUserSta
         email: 'ngx7687@gmail.com', 
         fullName: 'System Administrator', 
         role: 'Admin', 
-        createdAt: '2026-01-01' 
-      },
-      { 
-        email: 'admin@nutrinexus.com', 
-        fullName: 'System Admin', 
-        role: 'Admin', 
-        createdAt: '2026-01-01' 
-      },
-      { 
-        email: 'user@nutrinexus.com', 
-        fullName: 'John Doe', 
-        role: 'User', 
-        createdAt: '2026-02-15' 
+        createdAt: '2026-03-01' 
       }
     ];
   });
