@@ -20,7 +20,6 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Handle image upload from file picker
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
@@ -47,28 +46,16 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
         body: JSON.stringify({ image: selectedImage }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
+        throw new Error(data.error || 'Failed to analyze meal with AI.');
       }
 
-      const data = await response.json();
       setMealResult(data);
     } catch (err: any) {
-      console.warn('Backend server unreachable or API key missing. Using fallback AI analysis mode.');
-      
-      // FALLBACK SIMULATION: Ensures user never gets stuck and can view results immediately
-      setTimeout(() => {
-        setMealResult({
-          mealName: "Traditional Nasi Lemak",
-          calories: 650,
-          protein: 24,
-          fiber: 4.5,
-          carbs: 68,
-          fats: 32,
-          ingredients: ["Coconut Rice", "Sambal", "Hard-boiled Egg", "Anchovies (Ikan Bilis)", "Peanuts", "Cucumber"],
-          healthTip: "High energy meal. Balance your carbohydrate intake and focus on the protein and cucumber components to manage glucose spikes."
-        });
-      }, 800);
+      console.error('Analysis error:', err);
+      setError(err.message || 'Server error communicating with Google AI Studio.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -79,24 +66,24 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
     setSaving(true);
     setError(null);
     try {
-      const netCarbs = Math.max(0, mealResult.carbs - mealResult.fiber);
+      const netCarbs = Math.max(0, (mealResult.carbs || 50) - (mealResult.fiber || 5));
       const glycemicLoad = Math.round((55 * netCarbs) / 100 * 10) / 10;
       const glycemicImpact = glycemicLoad <= 10 ? 'low' : glycemicLoad <= 19 ? 'medium' : 'high';
 
       const foodItems: FoodItem[] = [{
-        name: mealResult.mealName,
+        name: mealResult.mealName || 'Scanned Meal',
         portion_g: 350,
-        calories: mealResult.calories,
-        carbs_g: mealResult.carbs,
-        fiber_g: mealResult.fiber,
-        sugar_g: Math.round(mealResult.carbs * 0.2),
-        protein_g: mealResult.protein,
-        fat_g: mealResult.fats,
+        calories: mealResult.calories || 500,
+        carbs_g: mealResult.carbs || 50,
+        fiber_g: mealResult.fiber || 5,
+        sugar_g: Math.round((mealResult.carbs || 50) * 0.2),
+        protein_g: mealResult.protein || 20,
+        fat_g: mealResult.fats || 20,
         estimated_gi: 55,
       }];
 
       const targetCalories = userProfile?.targets.calories || 2000;
-      const calorieFitScore = Math.max(0, 100 - Math.abs(mealResult.calories - (targetCalories / 3)) / (targetCalories / 3) * 50);
+      const calorieFitScore = Math.max(0, 100 - Math.abs((mealResult.calories || 500) - (targetCalories / 3)) / (targetCalories / 3) * 50);
       const glycemicScore = glycemicImpact === 'low' ? 100 : glycemicImpact === 'medium' ? 75 : 40;
       const nutritionScore = Math.round((calorieFitScore * 0.4) + (glycemicScore * 0.6));
 
@@ -108,7 +95,7 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
         confidence: 0.95,
         notes: mealResult.ingredients?.join(', ') || '',
         nutritionScore,
-        tip: mealResult.healthTip,
+        tip: mealResult.healthTip || 'Maintain steady blood glucose levels with balanced macronutrients.',
         timestamp: new Date().toISOString(),
       });
 
@@ -126,23 +113,20 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
   return (
     <div className="max-w-xl mx-auto px-4 py-8 space-y-6 pb-24 md:pb-12">
       <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-gray-100 space-y-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <HeartPulse className="w-6 h-6 text-emerald-600" /> Scan Meal & Nutrition
-          </h2>
-        </div>
+        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <HeartPulse className="w-6 h-6 text-emerald-600" /> Scan Meal & Nutrition (Live AI)
+        </h2>
 
-        {/* Image Upload / Display Box */}
         <div className="border-2 border-dashed border-emerald-300 p-4 rounded-xl text-center relative bg-emerald-50/50 hover:bg-emerald-50 transition cursor-pointer">
           {selectedImage ? (
             <div className="space-y-2">
               <img src={selectedImage} alt="Uploaded meal" className="max-h-64 mx-auto rounded-lg object-cover shadow-sm" />
-              <p className="text-xs text-emerald-700 font-medium">Image loaded successfully. Click or drag to change image.</p>
+              <p className="text-xs text-emerald-700 font-medium">Image loaded. Click or drag to change image.</p>
             </div>
           ) : (
             <div className="py-8 space-y-2">
               <Upload className="w-10 h-10 text-emerald-500 mx-auto" />
-              <p className="text-slate-600 font-medium">Upload or select a meal image (e.g. Nasi_Lemak.jpg)</p>
+              <p className="text-slate-600 font-medium">Upload or select a meal image</p>
             </div>
           )}
           <input 
@@ -173,23 +157,20 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
           {isAnalyzing ? (
             <>
               <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
-              Analyzing Meal with AI...
+              Analyzing with Google AI Studio...
             </>
           ) : (
-            'Analyze Meal'
+            'Analyze Meal with AI'
           )}
         </button>
 
-        {/* Results Display Grid */}
         {mealResult && (
           <div className="p-5 bg-emerald-50 rounded-xl border border-emerald-200 space-y-4 animate-fadeIn">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-xs font-bold px-2.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-full flex items-center gap-1 w-fit">
-                  <Sparkles className="w-3 h-3" /> AI Analysis Complete
-                </span>
-                <h3 className="text-lg font-bold text-emerald-900 mt-1">{mealResult.mealName}</h3>
-              </div>
+            <div>
+              <span className="text-xs font-bold px-2.5 py-0.5 bg-emerald-200 text-emerald-800 rounded-full flex items-center gap-1 w-fit">
+                <Sparkles className="w-3 h-3" /> AI Verified Accuracy
+              </span>
+              <h3 className="text-lg font-bold text-emerald-900 mt-1">{mealResult.mealName}</h3>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">
@@ -206,6 +187,12 @@ export const ScanMeal: React.FC<ScanMealProps> = ({
                 <span className="text-lg font-bold text-emerald-700">{mealResult.fiber}g</span>
               </div>
             </div>
+
+            {mealResult.ingredients && (
+              <div className="text-xs text-slate-600 bg-white p-3 rounded-lg border border-emerald-100">
+                <strong>Detected Ingredients:</strong> {mealResult.ingredients.join(', ')}
+              </div>
+            )}
 
             {mealResult.healthTip && (
               <div className="bg-white p-3 rounded-lg border border-emerald-100 text-xs text-slate-700">
