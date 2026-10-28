@@ -1,293 +1,290 @@
-import React from 'react';
-import { UserProfile, Meal, Reminder } from '../types';
-import { Camera, Utensils, Bell, Trophy, ArrowRight, Flame, Zap, HeartPulse, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 
-interface HomeDashboardProps {
-  userProfile: UserProfile | null;
-  meals: Meal[];
-  reminders: Reminder[];
-  pointsTotal: number;
-  setActiveTab: (tab: string) => void;
+interface UserAccount {
+  email: string;
+  fullName: string;
+  role: string;
 }
 
-export const HomeDashboard: React.FC<HomeDashboardProps> = ({
-  userProfile,
-  meals,
-  reminders,
-  pointsTotal,
-  setActiveTab,
-}) => {
-  if (!userProfile) {
+interface HomeDashboardProps {
+  userProfile?: any;
+  meals?: any[];
+  reminders?: any[];
+  pointsTotal?: number;
+  setActiveTab?: (tab: string) => void;
+  onAuthChange?: () => void;
+}
+
+export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAuthChange }) => {
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [error, setError] = useState('');
+
+  // 8-Hour Inactivity Timeout Logic
+  useEffect(() => {
+    const INACTIVITY_LIMIT = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+
+    const checkInactivity = () => {
+      const activeUser = localStorage.getItem('nutrinexus_current_user');
+      if (!activeUser) return;
+
+      const lastActive = localStorage.getItem('nutrinexus_last_activity');
+      if (lastActive) {
+        const elapsed = Date.now() - parseInt(lastActive, 10);
+        if (elapsed > INACTIVITY_LIMIT) {
+          // Time expired: Log out automatically
+          localStorage.removeItem('nutrinexus_current_user');
+          localStorage.removeItem('nutrinexus_last_activity');
+          setCurrentUser(null);
+          alert('Your session has expired due to 8 hours of inactivity. Please sign in again.');
+          window.location.reload();
+        }
+      }
+    };
+
+    const updateActivity = () => {
+      if (localStorage.getItem('nutrinexus_current_user')) {
+        localStorage.setItem('nutrinexus_last_activity', Date.now().toString());
+      }
+    };
+
+    // Initialize activity stamp on load if logged in
+    if (localStorage.getItem('nutrinexus_current_user') && !localStorage.getItem('nutrinexus_last_activity')) {
+      updateActivity();
+    }
+
+    // Event listeners for user activity
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+
+    // Check inactivity every 60 seconds
+    const interval = setInterval(checkInactivity, 60000);
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const checkUser = () => {
+    const active = localStorage.getItem('nutrinexus_current_user');
+    if (active) {
+      try {
+        setCurrentUser(JSON.parse(active));
+      } catch (e) {
+        setCurrentUser(null);
+      }
+    } else {
+      setCurrentUser(null);
+    }
+  };
+
+  useEffect(() => {
+    checkUser();
+    window.addEventListener('storage', checkUser);
+    return () => window.removeEventListener('storage', checkUser);
+  }, []);
+
+  // Sign-in handler
+  const handleSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const users = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
+    const found = users.find((u: any) => u.email === email);
+
+    if (!found) {
+      setError('Account not found with this email. Please check your credentials or sign up.');
+      return;
+    }
+
+    const alphanumericRegex = /^[A-Za-z0-9]+$/;
+    if (!alphanumericRegex.test(password) || password.length < 6) {
+      setError('Invalid password format.');
+      return;
+    }
+
+    localStorage.setItem('nutrinexus_current_user', JSON.stringify(found));
+    localStorage.setItem('nutrinexus_last_activity', Date.now().toString());
+    setCurrentUser(found);
+    if (onAuthChange) onAuthChange();
+    window.location.reload();
+  };
+
+  // Sign-out handler
+  const handleSignOut = () => {
+    localStorage.removeItem('nutrinexus_current_user');
+    localStorage.removeItem('nutrinexus_last_activity');
+    setCurrentUser(null);
+    if (onAuthChange) onAuthChange();
+    window.location.reload();
+  };
+
+  // Forgot Password handler
+  const handleForgotPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      setResetMessage('Please enter your registered email address.');
+      return;
+    }
+
+    const users = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
+    const exists = users.some((u: any) => u.email === resetEmail);
+
+    if (exists) {
+      setResetMessage(`Password reset instructions have been sent to ${resetEmail}.`);
+    } else {
+      setResetMessage('Email not found in registered accounts.');
+    }
+  };
+
+  // IF LOGGED OUT: Show Sign-In & Forgot Password
+  if (!currentUser) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-12 text-center">
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 sm:p-12">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
-            <HeartPulse className="w-8 h-8" />
+      <div className="max-w-xl mx-auto px-4 py-8 space-y-6 my-10">
+        <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-100 space-y-6">
+          <div className="text-center space-y-2">
+            <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">NutriNexus V4</span>
+            <h2 className="text-3xl font-bold text-slate-800">Welcome to Your Health Hub</h2>
+            <p className="text-sm text-slate-500">Sign in to track meals, monitor glycemic health, and manage reminders.</p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Welcome to NutriNexus</h2>
-          <p className="text-gray-600 mb-8 max-w-md mx-auto">
-            Your AI-powered nutrition and health companion. Please complete your profile setup to calculate your personalized TDEE, macronutrient targets, and glycemic guidelines.
-          </p>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-8 py-3 rounded-xl shadow-md transition flex items-center gap-2 mx-auto"
-          >
-            Set Up Your Profile <ArrowRight className="w-4 h-4" />
-          </button>
+
+          {error && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{error}</div>}
+
+          {!isForgotPassword ? (
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. user@nutrinexus.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Password</label>
+                <input
+                  type="password"
+                  placeholder="Alphanumeric password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(true); setResetMessage(''); }}
+                  className="text-emerald-600 hover:underline font-medium"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
+              >
+                Sign In
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="text-center">
+                <h3 className="font-bold text-slate-800 text-lg">Reset Your Password</h3>
+                <p className="text-xs text-slate-500">Enter your email to receive recovery steps.</p>
+              </div>
+
+              {resetMessage && <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200">{resetMessage}</div>}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Registered Email</label>
+                <input
+                  type="email"
+                  placeholder="e.g. user@nutrinexus.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsForgotPassword(false)}
+                  className="w-1/2 py-2.5 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition"
+                >
+                  Back to Sign In
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 py-2.5 bg-emerald-600 text-white font-semibold rounded-lg text-sm font-medium hover:bg-emerald-700 transition shadow-sm"
+                >
+                  Send Reset Link
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     );
   }
 
-  // Calculate today's totals
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayMeals = meals.filter(m => m.timestamp.startsWith(todayStr));
-  
-  const totalCalories = todayMeals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + f.calories, 0), 0);
-  const totalCarbs = todayMeals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + f.carbs_g, 0), 0);
-  const totalProtein = todayMeals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + f.protein_g, 0), 0);
-  const totalFat = todayMeals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + f.fat_g, 0), 0);
-  const totalFiber = todayMeals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + f.fiber_g, 0), 0);
-  const totalSugar = todayMeals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + f.sugar_g, 0), 0);
-
-  // Average nutrition score for today
-  const avgScore = todayMeals.length > 0
-    ? Math.round(todayMeals.reduce((acc, m) => acc + (m.nutritionScore || 75), 0) / todayMeals.length)
-    : 85;
-
-  // Score color
-  const scoreColor = avgScore >= 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : avgScore >= 60 ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-red-600 bg-red-50 border-red-200';
-
-  // Next reminder
-  const nextReminder = reminders.filter(r => r.status === 'pending')[0];
-
-  // Reward tier calculation
-  const nextTierPoints = pointsTotal < 100 ? 100 : pointsTotal < 300 ? 300 : pointsTotal < 600 ? 600 : 1000;
-  const rewardProgress = Math.min(100, Math.round((pointsTotal / nextTierPoints) * 100));
-
+  // IF LOGGED IN: Show Personalized Dashboard with Sign Out button
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 pb-24 md:pb-12">
-      {/* Greeting Banner */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/10 skew-x-12 pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 bg-emerald-500/30 text-emerald-100 px-3 py-1 rounded-full text-xs font-medium mb-3">
-              <Zap className="w-3.5 h-3.5 text-amber-300" /> Daily Health Companion Active
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold">Hello, {userProfile.name}! 👋</h2>
-            <p className="text-emerald-100 text-sm sm:text-base mt-1 max-w-xl">
-              Your TDEE target is <strong className="text-white">{userProfile.tdee} kcal</strong>. Stay consistent with your meals and medication to maintain your streak.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setActiveTab('scan')}
-              className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold px-5 py-3 rounded-xl shadow-md transition flex items-center gap-2 text-sm"
-            >
-              <Camera className="w-4 h-4 text-emerald-600" /> Scan Meal
-            </button>
-            <button
-              onClick={() => setActiveTab('reminders')}
-              className="bg-emerald-800/60 hover:bg-emerald-800 text-white font-medium px-4 py-3 rounded-xl backdrop-blur-xs transition flex items-center gap-2 text-sm border border-emerald-500/40"
-            >
-              <Bell className="w-4 h-4" /> Reminders
-            </button>
-          </div>
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 pb-24 md:pb-12">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">Active Session (8h Inactivity Timer)</span>
+          <h2 className="text-2xl font-bold text-slate-800 mt-1">Welcome back, {currentUser.fullName || currentUser.email}!</h2>
+          <p className="text-sm text-slate-500">Role: <strong className="text-slate-700">{currentUser.role}</strong></p>
         </div>
+        <button
+          onClick={handleSignOut}
+          className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-semibold transition shadow-xs flex items-center gap-2"
+        >
+          🚪 Sign Out
+        </button>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Nutrition Score & Calorie Progress */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Utensils className="w-5 h-5 text-emerald-600" /> Today's Nutrition Overview
-            </h3>
-            <span className="text-xs text-gray-500">{todayMeals.length} meals logged today</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Nutrition Score Card */}
-            <div className={`p-5 rounded-2xl border flex flex-col justify-between ${scoreColor}`}>
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Nutrition Score</span>
-                <div className="text-3xl font-extrabold mt-1">{avgScore}/100</div>
-              </div>
-              <div className="text-xs mt-3 flex items-center gap-1 font-medium">
-                <CheckCircle2 className="w-4 h-4" /> Based on target balance & glycemic load
-              </div>
-            </div>
-
-            {/* Calories Card */}
-            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Calories</span>
-                <div className="text-2xl font-bold text-gray-900 mt-1">
-                  {totalCalories} <span className="text-sm font-normal text-gray-500">/ {userProfile.targets.calories} kcal</span>
-                </div>
-              </div>
-              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mt-3">
-                <div
-                  className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (totalCalories / userProfile.targets.calories) * 100)}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Glycemic Load Summary */}
-            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Glycemic Load</span>
-                <div className="text-2xl font-bold text-gray-900 mt-1">
-                  {todayMeals.reduce((acc, m) => acc + m.glycemicLoad, 0).toFixed(1)}
-                  <span className="text-xs font-normal text-emerald-600 ml-2 font-medium">
-                    {todayMeals.length > 0 ? (todayMeals[todayMeals.length - 1].glycemicImpact.toUpperCase() + ' IMPACT') : 'No meals yet'}
-                  </span>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 mt-3 flex items-center gap-1">
-                <Flame className="w-3.5 h-3.5 text-amber-500" /> Target GL &lt; 20 per meal
-              </div>
-            </div>
-          </div>
-
-          {/* Macronutrients Progress */}
-          <div className="space-y-4 pt-2">
-            <h4 className="text-sm font-bold text-gray-800">Macronutrients Progress</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Carbs */}
-              <div>
-                <div className="flex justify-between text-xs font-medium text-gray-600 mb-1">
-                  <span>Carbohydrates</span>
-                  <span>{Math.round(totalCarbs)}g / {userProfile.targets.carbsG}g</span>
-                </div>
-                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-blue-500 h-full rounded-full"
-                    style={{ width: `${Math.min(100, (totalCarbs / userProfile.targets.carbsG) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Protein */}
-              <div>
-                <div className="flex justify-between text-xs font-medium text-gray-600 mb-1">
-                  <span>Protein</span>
-                  <span>{Math.round(totalProtein)}g / {userProfile.targets.proteinG}g</span>
-                </div>
-                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-emerald-500 h-full rounded-full"
-                    style={{ width: `${Math.min(100, (totalProtein / userProfile.targets.proteinG) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Fat */}
-              <div>
-                <div className="flex justify-between text-xs font-medium text-gray-600 mb-1">
-                  <span>Fat</span>
-                  <span>{Math.round(totalFat)}g / {userProfile.targets.fatG}g</span>
-                </div>
-                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-amber-500 h-full rounded-full"
-                    style={{ width: `${Math.min(100, (totalFat / userProfile.targets.fatG) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Fiber & Sugar */}
-              <div>
-                <div className="flex justify-between text-xs font-medium text-gray-600 mb-1">
-                  <span>Fiber ({Math.round(totalFiber)}g) / Sugar ({Math.round(totalSugar)}g)</span>
-                  <span className="text-emerald-600 font-semibold">Target Limits</span>
-                </div>
-                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden flex">
-                  <div
-                    className="bg-purple-500 h-full"
-                    style={{ width: `${Math.min(100, (totalFiber / userProfile.targets.fiberG) * 50)}%` }}
-                  />
-                  <div
-                    className="bg-rose-400 h-full"
-                    style={{ width: `${Math.min(100, (totalSugar / userProfile.targets.sugarG) * 50)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div 
+          onClick={() => setActiveTab && setActiveTab('scan')} 
+          className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 cursor-pointer hover:border-emerald-300 transition"
+        >
+          <span className="text-xs font-bold text-slate-400 uppercase">Quick Action</span>
+          <h3 className="font-bold text-slate-800 text-lg mt-1">Scan a Meal</h3>
+          <p className="text-xs text-slate-500 mt-1">Upload food photos to analyze calories, protein, and fiber instantly.</p>
         </div>
-
-        {/* Sidebar: Next Reminder & Rewards Progress */}
-        <div className="space-y-6">
-          {/* Next Reminder Card */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <Bell className="w-4 h-4 text-emerald-600" /> Next Reminder
-              </h3>
-              <button
-                onClick={() => setActiveTab('reminders')}
-                className="text-xs text-emerald-600 font-semibold hover:underline"
-              >
-                View All
-              </button>
-            </div>
-            {nextReminder ? (
-              <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-xl space-y-2">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800 capitalize">
-                    {nextReminder.type}
-                  </span>
-                  <span className="text-xs text-gray-500">{new Date(nextReminder.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                <h4 className="font-bold text-gray-900 text-sm">{nextReminder.title}</h4>
-                <p className="text-xs text-gray-600 line-clamp-2">{nextReminder.notes || 'No additional notes.'}</p>
-              </div>
-            ) : (
-              <div className="text-center py-6 text-gray-400 text-sm">
-                No pending reminders. Great job staying on track!
-              </div>
-            )}
-          </div>
-
-          {/* Rewards Status Card */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-500" /> Rewards & Points
-              </h3>
-              <button
-                onClick={() => setActiveTab('rewards')}
-                className="text-xs text-emerald-600 font-semibold hover:underline"
-              >
-                Ledger
-              </button>
-            </div>
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/60 p-4 rounded-xl flex items-center justify-between mb-4">
-              <div>
-                <span className="text-xs text-amber-800 font-medium">Total Points Earned</span>
-                <div className="text-3xl font-extrabold text-amber-900 mt-0.5">{pointsTotal} pts</div>
-              </div>
-              <div className="w-12 h-12 bg-amber-500 text-white rounded-2xl flex items-center justify-center font-bold shadow-md">
-                🏆
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs font-medium text-gray-600 mb-1">
-                <span>Progress to Next Reward Tier</span>
-                <span>{pointsTotal} / {nextTierPoints} pts</span>
-              </div>
-              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-amber-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${rewardProgress}%` }}
-                />
-              </div>
-            </div>
-          </div>
+        <div 
+          onClick={() => setActiveTab && setActiveTab('profile')} 
+          className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 cursor-pointer hover:border-emerald-300 transition"
+        >
+          <span className="text-xs font-bold text-slate-400 uppercase">Health Tracker</span>
+          <h3 className="font-bold text-slate-800 text-lg mt-1">Profile & Glycemic Goals</h3>
+          <p className="text-xs text-slate-500 mt-1">Review your calculated TDEE, protein targets, and lab values.</p>
+        </div>
+        <div 
+          onClick={() => setActiveTab && setActiveTab('reminders')} 
+          className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 cursor-pointer hover:border-emerald-300 transition"
+        >
+          <span className="text-xs font-bold text-slate-400 uppercase">Reminders</span>
+          <h3 className="font-bold text-slate-800 text-lg mt-1">Medication & Schedule</h3>
+          <p className="text-xs text-slate-500 mt-1">Keep track of your daily dosages and health check-ups.</p>
         </div>
       </div>
     </div>
