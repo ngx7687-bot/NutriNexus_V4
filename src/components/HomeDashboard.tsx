@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 interface UserAccount {
   email: string;
   fullName: string;
-  role: string;
-  createdAt?: string;
+  role: 'Admin' | 'User';
+  password?: string;
+  createdAt: string;
 }
 
 interface HomeDashboardProps {
@@ -16,14 +17,29 @@ interface HomeDashboardProps {
   onAuthChange?: () => void;
 }
 
-export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAuthChange }) => {
+const DEFAULT_ADMIN: UserAccount = {
+  email: 'ngx7687@gmail.com',
+  fullName: 'System Administrator',
+  role: 'Admin',
+  password: 'ngx7687',
+  createdAt: '2026-03-01'
+};
+
+export function HomeDashboard({ setActiveTab, onAuthChange }: HomeDashboardProps) {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  
+  // Auth view mode: 'signin' | 'signup' | 'reset'
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'reset'>('signin');
+
+  // Form Fields
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetMessage, setResetMessage] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  // Status & Feedback
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // 8-Hour Inactivity Timeout Logic
   useEffect(() => {
@@ -74,12 +90,30 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAu
     };
   }, []);
 
-  const checkUser = () => {
+  // Auto-seed admin and load active user
+  const checkUserAndSeed = () => {
+    // 1. Ensure admin account always exists in localStorage
+    const rawUsers = localStorage.getItem('nutrinexus_users');
+    let users: UserAccount[] = rawUsers ? JSON.parse(rawUsers) : [];
+
+    const adminIndex = users.findIndex(
+      (u) => u.email.toLowerCase() === DEFAULT_ADMIN.email.toLowerCase()
+    );
+
+    if (adminIndex === -1) {
+      users.push(DEFAULT_ADMIN);
+      localStorage.setItem('nutrinexus_users', JSON.stringify(users));
+    } else if (users[adminIndex].role !== 'Admin') {
+      users[adminIndex].role = 'Admin';
+      localStorage.setItem('nutrinexus_users', JSON.stringify(users));
+    }
+
+    // 2. Load current session
     const active = localStorage.getItem('nutrinexus_current_user');
     if (active) {
       try {
         setCurrentUser(JSON.parse(active));
-      } catch (e) {
+      } catch {
         setCurrentUser(null);
       }
     } else {
@@ -87,49 +121,37 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAu
     }
   };
 
-  const ADMIN_ACCOUNT: UserAccount = {
-    email: 'ngx7687@gmail.com',
-    fullName: 'System Administrator',
-    role: 'Admin',
-    createdAt: '2026-03-01'
-  };
-
   useEffect(() => {
-    // 1. Ensure ngx7687@gmail.com always exists in local storage
-    const rawUsers = localStorage.getItem('nutrinexus_users');
-    let currentUsers: UserAccount[] = rawUsers ? JSON.parse(rawUsers) : [];
-
-    const adminExists = currentUsers.some(
-      (u) => u.email.toLowerCase() === ADMIN_ACCOUNT.email.toLowerCase()
-    );
-
-    if (!adminExists) {
-      currentUsers = [ADMIN_ACCOUNT, ...currentUsers.filter(u => u.email !== ADMIN_ACCOUNT.email)];
-      localStorage.setItem('nutrinexus_users', JSON.stringify(currentUsers));
-    }
-
-    // 2. Check active session
-    checkUser();
-    window.addEventListener('storage', checkUser);
-    return () => window.removeEventListener('storage', checkUser);
+    checkUserAndSeed();
+    window.addEventListener('storage', checkUserAndSeed);
+    return () => window.removeEventListener('storage', checkUserAndSeed);
   }, []);
 
-  // Sign-in handler
+  const alphanumericRegex = /^[A-Za-z0-9]+$/;
+
+  // 1. SIGN IN HANDLER
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
 
-    const users = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
-    const found = users.find((u: any) => u.email === email);
+    const users: UserAccount[] = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
+    const cleanedEmail = email.trim().toLowerCase();
+
+    const found = users.find((u) => u.email.trim().toLowerCase() === cleanedEmail);
 
     if (!found) {
       setError('Account not found with this email. Please check your credentials or sign up.');
       return;
     }
 
-    const alphanumericRegex = /^[A-Za-z0-9]+$/;
+    if (found.password && found.password !== password) {
+      setError('Incorrect password. Please try again or use Reset Password.');
+      return;
+    }
+
     if (!alphanumericRegex.test(password) || password.length < 6) {
-      setError('Invalid password format.');
+      setError('Password must be at least 6 alphanumeric characters.');
       return;
     }
 
@@ -140,7 +162,99 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAu
     window.location.reload();
   };
 
-  // Sign-out handler
+  // 2. SIGN UP HANDLER
+  const handleSignUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+
+    if (!fullName.trim()) {
+      setError('Please provide your full name.');
+      return;
+    }
+
+    const cleanedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (!alphanumericRegex.test(password) || password.length < 6) {
+      setError('Password must be at least 6 alphanumeric characters (no symbols).');
+      return;
+    }
+
+    const users: UserAccount[] = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
+    if (users.some((u) => u.email.toLowerCase() === cleanedEmail)) {
+      setError('An account with this email already exists. Please sign in instead.');
+      return;
+    }
+
+    const newUser: UserAccount = {
+      email: cleanedEmail,
+      fullName: fullName.trim(),
+      role: cleanedEmail === DEFAULT_ADMIN.email.toLowerCase() ? 'Admin' : 'User',
+      password: password,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    const updated = [...users, newUser];
+    localStorage.setItem('nutrinexus_users', JSON.stringify(updated));
+    localStorage.setItem('nutrinexus_current_user', JSON.stringify(newUser));
+    localStorage.setItem('nutrinexus_last_activity', Date.now().toString());
+
+    // Pre-fill profile record
+    const profile = JSON.parse(localStorage.getItem('nutrinexus_profile') || '{}');
+    localStorage.setItem('nutrinexus_profile', JSON.stringify({
+      ...profile,
+      email: newUser.email,
+      fullName: newUser.fullName
+    }));
+
+    setCurrentUser(newUser);
+    if (onAuthChange) onAuthChange();
+    window.location.reload();
+  };
+
+  // 3. PASSWORD RESET HANDLER
+  const handlePasswordReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+
+    const cleanedEmail = email.trim().toLowerCase();
+    if (!cleanedEmail) {
+      setError('Please enter your registered email address.');
+      return;
+    }
+
+    if (!alphanumericRegex.test(newPassword) || newPassword.length < 6) {
+      setError('New password must be at least 6 alphanumeric characters.');
+      return;
+    }
+
+    const users: UserAccount[] = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
+    const userIndex = users.findIndex((u) => u.email.toLowerCase() === cleanedEmail);
+
+    if (userIndex === -1) {
+      setError('No account found with this email.');
+      return;
+    }
+
+    users[userIndex].password = newPassword;
+    localStorage.setItem('nutrinexus_users', JSON.stringify(users));
+
+    setSuccessMessage('Password successfully updated! You can now sign in with your new password.');
+    setPassword('');
+    setNewPassword('');
+    setTimeout(() => {
+      setAuthMode('signin');
+      setSuccessMessage('');
+    }, 2000);
+  };
+
+  // SIGN OUT HANDLER
   const handleSignOut = () => {
     localStorage.removeItem('nutrinexus_current_user');
     localStorage.removeItem('nutrinexus_last_activity');
@@ -149,124 +263,188 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAu
     window.location.reload();
   };
 
-  // Forgot Password handler
-  const handleForgotPassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetEmail) {
-      setResetMessage('Please enter your registered email address.');
-      return;
-    }
-
-    const users = JSON.parse(localStorage.getItem('nutrinexus_users') || '[]');
-    const exists = users.some((u: any) => u.email === resetEmail);
-
-    if (exists) {
-      setResetMessage(`Password reset instructions have been sent to ${resetEmail}.`);
-    } else {
-      setResetMessage('Email not found in registered accounts.');
-    }
-  };
-
-  // IF LOGGED OUT: Show Sign-In & Forgot Password
+  // -------------------------------------------------------------
+  // NOT LOGGED IN: TABS FOR SIGN-IN, SIGN-UP, AND RESET PASSWORD
+  // -------------------------------------------------------------
   if (!currentUser) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-8 space-y-6 my-10">
-        <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-100 space-y-6">
-          <div className="text-center space-y-2">
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">NutriNexus V4</span>
-            <h2 className="text-3xl font-bold text-slate-800">Welcome to Your Health Hub</h2>
-            <p className="text-sm text-slate-500">Sign in to track meals, monitor glycemic health, and manage reminders.</p>
-          </div>
-
-          {error && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{error}</div>}
-
-          {!isForgotPassword ? (
-            <form onSubmit={handleSignIn} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="e.g. user@nutrinexus.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="Alphanumeric password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <button
-                  type="button"
-                  onClick={() => { setIsForgotPassword(true); setResetMessage(''); }}
-                  className="text-emerald-600 hover:underline font-medium"
-                >
-                  Forgot Password?
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
-              >
-                Sign In
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="text-center">
-                <h3 className="font-bold text-slate-800 text-lg">Reset Your Password</h3>
-                <p className="text-xs text-slate-500">Enter your email to receive recovery steps.</p>
-              </div>
-
-              {resetMessage && <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200">{resetMessage}</div>}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Registered Email</label>
-                <input
-                  type="email"
-                  placeholder="e.g. user@nutrinexus.com"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsForgotPassword(false)}
-                  className="w-1/2 py-2.5 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition"
-                >
-                  Back to Sign In
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2.5 bg-emerald-600 text-white font-semibold rounded-lg text-sm font-medium hover:bg-emerald-700 transition shadow-sm"
-                >
-                  Send Reset Link
-                </button>
-              </div>
-            </form>
-          )}
+      <div className="max-w-xl mx-auto p-8 bg-white rounded-2xl shadow-md border border-slate-100 space-y-6 my-10">
+        <div className="text-center space-y-2">
+          <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
+            NutriNexus V4
+          </span>
+          <h2 className="text-3xl font-bold text-slate-800">Welcome to Your Health Hub</h2>
+          <p className="text-sm text-slate-500">
+            Sign in to track meals, monitor glycemic health, and manage reminders.
+          </p>
         </div>
+
+        {/* Tab Switcher */}
+        <div className="flex border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => { setAuthMode('signin'); setError(''); setSuccessMessage(''); }}
+            className={`flex-1 py-2 text-center text-sm font-semibold border-b-2 transition ${
+              authMode === 'signin'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => { setAuthMode('signup'); setError(''); setSuccessMessage(''); }}
+            className={`flex-1 py-2 text-center text-sm font-semibold border-b-2 transition ${
+              authMode === 'signup'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Sign Up
+          </button>
+          <button
+            type="button"
+            onClick={() => { setAuthMode('reset'); setError(''); setSuccessMessage(''); }}
+            className={`flex-1 py-2 text-center text-sm font-semibold border-b-2 transition ${
+              authMode === 'reset'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Reset Password
+          </button>
+        </div>
+
+        {error && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{error}</div>}
+        {successMessage && <div className="p-3 bg-emerald-50 text-emerald-800 text-sm rounded-lg border border-emerald-200">{successMessage}</div>}
+
+        {/* SIGN IN VIEW */}
+        {authMode === 'signin' && (
+          <form onSubmit={handleSignIn} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
+              <input
+                type="email"
+                placeholder="e.g. user@nutrinexus.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Password</label>
+              <input
+                type="password"
+                placeholder="Alphanumeric password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
+            >
+              Sign In
+            </button>
+          </form>
+        )}
+
+        {/* SIGN UP VIEW */}
+        {authMode === 'signup' && (
+          <form onSubmit={handleSignUp} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Full Name</label>
+              <input
+                type="text"
+                placeholder="e.g. John Doe"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
+              <input
+                type="email"
+                placeholder="e.g. user@nutrinexus.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Password (Min 6 alphanumeric)</label>
+              <input
+                type="password"
+                placeholder="Create alphanumeric password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
+            >
+              Create Account
+            </button>
+          </form>
+        )}
+
+        {/* RESET PASSWORD VIEW */}
+        {authMode === 'reset' && (
+          <form onSubmit={handlePasswordReset} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Registered Email</label>
+              <input
+                type="email"
+                placeholder="e.g. user@nutrinexus.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">New Password</label>
+              <input
+                type="password"
+                placeholder="Enter new alphanumeric password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full p-3 border rounded-lg text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
+            >
+              Update Password
+            </button>
+          </form>
+        )}
       </div>
     );
   }
 
-  // IF LOGGED IN: Show Personalized Dashboard with Sign Out button
+  // -------------------------------------------------------------
+  // LOGGED IN: PERSONALIZED DASHBOARD
+  // -------------------------------------------------------------
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 pb-24 md:pb-12">
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -311,4 +489,4 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ setActiveTab, onAu
       </div>
     </div>
   );
-};
+}
